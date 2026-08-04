@@ -31,7 +31,7 @@ jobs:
         id: plan
         run: |
           #Output TF Vars to vars file
-          echo "$PROD_TFVARS" > prod.tfvars
+          printf "%s\n" "$PROD_TFVARS" > prod.tfvars
 
           #Run TF Plan
           terraform plan -var-file=prod.tfvars
