@@ -34,7 +34,7 @@ jobs:
           printf "%s\n" "$PROD_TFVARS" > prod.tfvars
 
           #Run TF Plan
-          terraform plan -var-file=prod.tfvars
+          terraform plan -out=tfplan -var-file=prod.tfvars
 
       - name: Terraform Apply
         id: apply
