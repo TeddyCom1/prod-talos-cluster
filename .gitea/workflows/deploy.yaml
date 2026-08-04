@@ -1,5 +1,5 @@
-name: DMZ Kube Cluster Deploy
-run-name: ${{ gitea.actor }} deploying DMZ cluster
+name: Prod Kube Cluster Deploy
+run-name: ${{ gitea.actor }} deploying Prod cluster
 on: [workflow_dispatch]
 
 jobs:
