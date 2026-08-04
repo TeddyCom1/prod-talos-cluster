@@ -1,0 +1,126 @@
+terraform {
+  required_providers {
+    proxmox = {
+      source  = "bpg/proxmox"
+      version = ">= 0.66.0"
+    }
+    talos = {
+      source  = "siderolabs/talos"
+      version = "~> 0.7.0"
+    }
+  }
+  backend "http" {
+    address        = "https://git.home.mongernet.com/api/packages/ci-bot/terraform/state/dmz-kube-cluster"
+    lock_address   = "https://git.home.mongernet.com/api/packages/ci-bot/terraform/state/dmz-kube-cluster/lock"
+    unlock_address = "https://git.home.mongernet.com/api/packages/ci-bot/terraform/state/dmz-kube-cluster/lock"
+    lock_method    = "POST"
+    unlock_method  = "DELETE"
+  }
+  required_version = ">= 1.3.0"
+}
+
+provider "proxmox" {
+  endpoint = "https://${var.proxmox_url}"
+  insecure = true
+  # Credentials via PROXMOX_VE_API_TOKEN env var.
+  # Format: "user@realm!tokenid=<uuid-secret>"
+
+  # SSH is required by the bpg/proxmox provider to import disk images (file_id).
+  # Without this block, disk imports silently fail and VMs are created with no disk.
+  ssh {
+    node {
+      name    = var.proxmox_node_name
+      address = var.proxmox_url
+      port    = 2202
+    }
+  }
+}
+
+# ─── Cluster secrets (generated once, shared across both module calls) ────────
+
+resource "talos_machine_secrets" "this" {}
+
+resource "proxmox_download_file" "talos_image" {
+  content_type            = "iso"
+  datastore_id            = "local"
+  node_name               = var.proxmox_node_name
+  url                     = "https://factory.talos.dev/image/${var.talos_image_factory_id}/v${var.talos_version}/nocloud-amd64.raw.zst"
+  decompression_algorithm = "zst"
+  file_name               = "talos-v${var.talos_version}-nocloud-amd64.img"
+  overwrite               = true
+}
+
+# ─── Control plane node ────────────────────────────────────────────────────────
+
+module "controlplane" {
+  source = "git::https://github.com/TeddyCom1/talos-proxmox-module.git"
+
+  node_type       = "controlplane"
+  cluster_name    = var.cluster_name
+  machine_secrets = talos_machine_secrets.this
+  talos_version   = var.talos_version
+  image_id        = proxmox_download_file.talos_image.id
+  vlan_id         = var.vlan_id
+  vm_name         = "dmz-cp-0"
+  target_node     = var.proxmox_node_name
+
+  cores     = 2
+  memory    = 4096
+  disk_size = 20
+}
+
+resource "talos_machine_configuration_apply" "controlplane" {
+  client_configuration        = talos_machine_secrets.this.client_configuration
+  machine_configuration_input = module.controlplane.machine_configuration
+  node                        = module.controlplane.ip
+}
+
+# Bootstrap the cluster on the control plane node after its config is applied.
+resource "talos_machine_bootstrap" "this" {
+  client_configuration = talos_machine_secrets.this.client_configuration
+  node                 = module.controlplane.ip
+
+  depends_on = [talos_machine_configuration_apply.controlplane]
+}
+
+# ─── Worker node ───────────────────────────────────────────────────────────────
+
+module "worker" {
+  source = "git::https://github.com/TeddyCom1/talos-proxmox-module.git"
+
+  node_type        = "worker"
+  cluster_name     = var.cluster_name
+  cluster_endpoint = "https://${module.controlplane.ip}:6443"
+  machine_secrets  = talos_machine_secrets.this
+  talos_version    = var.talos_version
+  image_id         = proxmox_download_file.talos_image.id
+  vlan_id          = var.vlan_id
+  vm_name          = "dmz-worker-0"
+  target_node      = var.proxmox_node_name
+
+  cores     = 2
+  memory    = 4096
+  disk_size = 20
+}
+
+resource "talos_machine_configuration_apply" "worker" {
+  client_configuration        = talos_machine_secrets.this.client_configuration
+  machine_configuration_input = module.worker.machine_configuration
+  node                        = module.worker.ip
+
+  depends_on = [talos_machine_bootstrap.this]
+}
+
+# ─── Outputs ──────────────────────────────────────────────────────────────────
+
+resource "talos_cluster_kubeconfig" "this" {
+  client_configuration = talos_machine_secrets.this.client_configuration
+  node                 = module.controlplane.ip
+
+  depends_on = [talos_machine_bootstrap.this]
+}
+
+output "kubeconfig" {
+  value     = talos_cluster_kubeconfig.this.kubeconfig_raw
+  sensitive = true
+}

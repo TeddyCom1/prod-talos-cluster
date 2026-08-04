@@ -1,0 +1,35 @@
+name: DMZ Kube Cluster Deploy
+run-name: ${{ gitea.actor }} deploying DMZ cluster
+on: [workflow_dispatch]
+
+jobs:
+  Terraform-Deploy:
+    runs-on: ubuntu-latest
+    env:
+      TF_HTTP_USERNAME: "ci-bot"
+      TF_HTTP_PASSWORD: ${{ secrets.CI_BOT_TOKEN }}
+      PROXMOX_VE_PASSWORD: ${{ secrets.PROXMOX_VE_PASSWORD }}
+      PROXMOX_VE_USERNAME: ${{ secrets.PROXMOX_VE_USERNAME }}
+      PROXMOX_VE_SSH_USERNAME: ${{ secrets.PROXMOX_VE_SSH_USERNAME }}
+      PROVMOX_VE_SSH_PASSWORD: ${{ secrets.PROXMOX_VE_PASSWORD }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      - name: Terraform Init
+        id: init
+        run: terraform init
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -out=tfplan -var-file=vars/prod.tfvars
+
+      - name: Terraform Apply
+        id: apply
+        run: terraform apply -auto-approve tfplan 2>&1
