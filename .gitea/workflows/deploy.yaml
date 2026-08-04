@@ -6,6 +6,7 @@ jobs:
   Terraform-Deploy:
     runs-on: ubuntu-latest
     env:
+      PROD_TFVARS: ${{ vars.PROD_TFVARS }}
       TF_HTTP_USERNAME: "ci-bot"
       TF_HTTP_PASSWORD: ${{ secrets.CI_BOT_TOKEN }}
       PROXMOX_VE_PASSWORD: ${{ secrets.PROXMOX_VE_PASSWORD }}
@@ -28,7 +29,12 @@ jobs:
 
       - name: Terraform Plan
         id: plan
-        run: terraform plan -out=tfplan -var-file=vars/prod.tfvars
+        run: |
+          #Output TF Vars to vars file
+          echo $PROD_TFVARS > prod.tfvars
+
+          #Run TF Plan
+          terraform plan -var-file=prod.tfvars
 
       - name: Terraform Apply
         id: apply
