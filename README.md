@@ -1,4 +1,4 @@
-# dmz_kube_cluster
+# Prod Talos Cluster
 
 Terraform root module that deploys a Talos Kubernetes cluster in the prod homelab network using the [`kube-talos-node-module`](https://github.com/TeddyCom1/talos-proxmox-module).
 
