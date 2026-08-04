@@ -61,7 +61,7 @@ module "controlplane" {
   talos_version   = var.talos_version
   image_id        = proxmox_download_file.talos_image.id
   vlan_id         = var.vlan_id
-  vm_name         = "dmz-cp-0"
+  vm_name         = "prod-cp-0"
   target_node     = var.proxmox_node_name
 
   cores     = 2
@@ -95,7 +95,7 @@ module "worker" {
   talos_version    = var.talos_version
   image_id         = proxmox_download_file.talos_image.id
   vlan_id          = var.vlan_id
-  vm_name          = "dmz-worker-0"
+  vm_name          = "prod-worker-0"
   target_node      = var.proxmox_node_name
 
   cores     = 2
